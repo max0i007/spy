@@ -1,0 +1,5 @@
+discord.py-self>=2.0.1
+python-dotenv
+rich
+flask
+aiohttp
