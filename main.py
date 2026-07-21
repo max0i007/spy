@@ -34,6 +34,362 @@ from rich import box
 from rich.theme import Theme
 from pathlib import Path
 import aiohttp
+from flask import Flask, jsonify
+from threading import Thread
+import time
+
+# ── Flask Web Server for Render Uptime ──────────────────────────────────
+app = Flask(__name__)
+
+# Global state for uptime monitoring
+_bot_state = {
+    "status": "starting",
+    "started_at": None,
+    "messages_logged": 0,
+    "edits_logged": 0,
+    "deletes_logged": 0,
+    "reactions_logged": 0,
+    "uptime_seconds": 0,
+}
+
+@app.route("/")
+def home():
+    """Home page with bot status."""
+    uptime = "Not started"
+    if _bot_state["started_at"]:
+        delta = time.time() - _bot_state["started_at"]
+        hours = int(delta // 3600)
+        minutes = int((delta % 3600) // 60)
+        seconds = int(delta % 60)
+        uptime = f"{hours}h {minutes}m {seconds}s"
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Mod Accountability Logger</title>
+        <meta charset="utf-8">
+        <style>
+            body {{
+                font-family: 'Segoe UI', system-ui, sans-serif;
+                background: #1a1a2e;
+                color: #eee;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                margin: 0;
+            }}
+            .card {{
+                background: #16213e;
+                border-radius: 16px;
+                padding: 40px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+                max-width: 420px;
+                width: 90%;
+                text-align: center;
+            }}
+            .status {{
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                padding: 6px 16px;
+                border-radius: 20px;
+                font-size: 14px;
+                font-weight: 600;
+                margin-bottom: 20px;
+            }}
+            .status.online {{ background: #1b5e20; color: #69f0ae; }}
+            .status.offline {{ background: #b71c1c; color: #ff8a80; }}
+            .status.starting {{ background: #e65100; color: #ffd180; }}
+            .dot {{
+                width: 10px; height: 10px;
+                border-radius: 50%;
+                background: currentColor;
+                animation: pulse 2s infinite;
+            }}
+            @keyframes pulse {{
+                0%, 100% {{ opacity: 1; }}
+                50% {{ opacity: 0.4; }}
+            }}
+            h1 {{ margin: 0 0 8px 0; font-size: 24px; }}
+            .subtitle {{ color: #888; font-size: 14px; margin-bottom: 24px; }}
+            .stats {{
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+                margin-top: 20px;
+            }}
+            .stat {{
+                background: #0f3460;
+                padding: 14px;
+                border-radius: 10px;
+            }}
+            .stat-value {{
+                font-size: 22px;
+                font-weight: 700;
+                color: #e94560;
+            }}
+            .stat-label {{
+                font-size: 12px;
+                color: #aaa;
+                margin-top: 4px;
+            }}
+            .uptime {{
+                margin-top: 20px;
+                padding: 12px;
+                background: #0f3460;
+                border-radius: 10px;
+                font-family: monospace;
+                font-size: 16px;
+            }}
+            .footer {{
+                margin-top: 24px;
+                font-size: 12px;
+                color: #666;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="status {_bot_state['status']}">
+                <span class="dot"></span>
+                {_bot_state['status'].upper()}
+            </div>
+            <h1>🔍 Mod Logger</h1>
+            <div class="subtitle">Discord Moderator Accountability</div>
+
+            <div class="uptime">⏱ Uptime: {uptime}</div>
+
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">{_bot_state['messages_logged']}</div>
+                    <div class="stat-label">Messages</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{_bot_state['edits_logged']}</div>
+                    <div class="stat-label">Edits</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{_bot_state['deletes_logged']}</div>
+                    <div class="stat-label">Deletes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{_bot_state['reactions_logged']}</div>
+                    <div class="stat-label">Reactions</div>
+                </div>
+            </div>
+
+            <div class="footer">
+                Running on Render · discord.py-self
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html
+
+@app.route("/health")
+def health():
+    """Health check endpoint for uptime monitors."""
+    return jsonify({
+        "status": _bot_state["status"],
+        "uptime_seconds": time.time() - _bot_state["started_at"] if _bot_state["started_at"] else 0,
+    }), 200 if _bot_state["status"] == "online" else 503
+
+@app.route("/ping")
+def ping():
+    """Simple ping for uptime bots."""
+    return "pong", 200
+
+def run_flask():
+    """Run Flask in a background thread."""
+    # Render sets PORT env var; default to 10000 for local testing
+    port = int(os.getenv("PORT", 10000))
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+
+# ── Start Flask thread before bot ───────────────────────────────────────
+flask_thread = Thread(target=run_flask, daemon=True)
+flask_thread.start()
+
+from flask import Flask, jsonify
+from threading import Thread
+import time
+
+# ── Flask Web Server for Render Uptime ──────────────────────────────────
+app = Flask(__name__)
+
+# Global state for uptime monitoring
+_bot_state = {
+    "status": "starting",
+    "started_at": None,
+    "messages_logged": 0,
+    "edits_logged": 0,
+    "deletes_logged": 0,
+    "reactions_logged": 0,
+    "uptime_seconds": 0,
+}
+
+@app.route("/")
+def home():
+    """Home page with bot status."""
+    uptime = "Not started"
+    if _bot_state["started_at"]:
+        delta = time.time() - _bot_state["started_at"]
+        hours = int(delta // 3600)
+        minutes = int((delta % 3600) // 60)
+        seconds = int(delta % 60)
+        uptime = f"{hours}h {minutes}m {seconds}s"
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Mod Accountability Logger</title>
+        <meta charset="utf-8">
+        <style>
+            body {{
+                font-family: 'Segoe UI', system-ui, sans-serif;
+                background: #1a1a2e;
+                color: #eee;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                margin: 0;
+            }}
+            .card {{
+                background: #16213e;
+                border-radius: 16px;
+                padding: 40px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+                max-width: 420px;
+                width: 90%;
+                text-align: center;
+            }}
+            .status {{
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                padding: 6px 16px;
+                border-radius: 20px;
+                font-size: 14px;
+                font-weight: 600;
+                margin-bottom: 20px;
+            }}
+            .status.online {{ background: #1b5e20; color: #69f0ae; }}
+            .status.offline {{ background: #b71c1c; color: #ff8a80; }}
+            .status.starting {{ background: #e65100; color: #ffd180; }}
+            .dot {{
+                width: 10px; height: 10px;
+                border-radius: 50%;
+                background: currentColor;
+                animation: pulse 2s infinite;
+            }}
+            @keyframes pulse {{
+                0%, 100% {{ opacity: 1; }}
+                50% {{ opacity: 0.4; }}
+            }}
+            h1 {{ margin: 0 0 8px 0; font-size: 24px; }}
+            .subtitle {{ color: #888; font-size: 14px; margin-bottom: 24px; }}
+            .stats {{
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+                margin-top: 20px;
+            }}
+            .stat {{
+                background: #0f3460;
+                padding: 14px;
+                border-radius: 10px;
+            }}
+            .stat-value {{
+                font-size: 22px;
+                font-weight: 700;
+                color: #e94560;
+            }}
+            .stat-label {{
+                font-size: 12px;
+                color: #aaa;
+                margin-top: 4px;
+            }}
+            .uptime {{
+                margin-top: 20px;
+                padding: 12px;
+                background: #0f3460;
+                border-radius: 10px;
+                font-family: monospace;
+                font-size: 16px;
+            }}
+            .footer {{
+                margin-top: 24px;
+                font-size: 12px;
+                color: #666;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="status {_bot_state['status']}">
+                <span class="dot"></span>
+                {_bot_state['status'].upper()}
+            </div>
+            <h1>🔍 Mod Logger</h1>
+            <div class="subtitle">Discord Moderator Accountability</div>
+
+            <div class="uptime">⏱ Uptime: {uptime}</div>
+
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">{_bot_state['messages_logged']}</div>
+                    <div class="stat-label">Messages</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{_bot_state['edits_logged']}</div>
+                    <div class="stat-label">Edits</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{_bot_state['deletes_logged']}</div>
+                    <div class="stat-label">Deletes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{_bot_state['reactions_logged']}</div>
+                    <div class="stat-label">Reactions</div>
+                </div>
+            </div>
+
+            <div class="footer">
+                Running on Render · discord.py-self
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html
+
+@app.route("/health")
+def health():
+    """Health check endpoint for uptime monitors."""
+    return jsonify({
+        "status": _bot_state["status"],
+        "uptime_seconds": time.time() - _bot_state["started_at"] if _bot_state["started_at"] else 0,
+    }), 200 if _bot_state["status"] == "online" else 503
+
+@app.route("/ping")
+def ping():
+    """Simple ping for uptime bots."""
+    return "pong", 200
+
+def run_flask():
+    """Run Flask in a background thread."""
+    # Render sets PORT env var; default to 10000 for local testing
+    port = int(os.getenv("PORT", 10000))
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+
+# ── Start Flask thread before bot ───────────────────────────────────────
+flask_thread = Thread(target=run_flask, daemon=True)
+flask_thread.start()
+
 
 # ── Theme ─────────────────────────────────────────────────────────────────
 CUSTOM_THEME = Theme({
@@ -196,6 +552,7 @@ class SpyLogger:
         self.msg_count = 0
         self.edit_count = 0
         self.delete_count = 0
+        self.reaction_count = 0
         self.start_time = datetime.now()
 
     def _ts(self) -> str:
@@ -222,6 +579,7 @@ class SpyLogger:
 
     def msg(self, user: str, content: str, attachments: int = 0):
         self.msg_count += 1
+        _bot_state["messages_logged"] = self.msg_count
         att_str = f" [bright_yellow](+{attachments} attachments)[/bright_yellow]" if attachments else ""
         self._print("msg", "bright_white", 
             f"[bold bright_cyan]{user}[/bold bright_cyan]: [bright_white]{content[:200]}[/bright_white]{att_str}"
@@ -229,6 +587,7 @@ class SpyLogger:
 
     def edit(self, user: str, before: str, after: str):
         self.edit_count += 1
+        _bot_state["edits_logged"] = self.edit_count
         self._print("edit", "bright_yellow",
             f"[bold bright_cyan]{user}[/bold bright_cyan] [dim]edited:[/dim]\n"
             f"  [bright_red]-[/bright_red] {before[:100]}\n"
@@ -237,6 +596,7 @@ class SpyLogger:
 
     def delete(self, user: str, content: str):
         self.delete_count += 1
+        _bot_state["deletes_logged"] = self.delete_count
         self._print("delete", "bright_red",
             f"[bold bright_cyan]{user}[/bold bright_cyan] [bold bright_red]DELETED:[/bold bright_red] [dim]{content[:200]}[/dim]"
         )
@@ -488,6 +848,8 @@ class ModLogger(discord.Client):
         return "\n".join(lines)
 
     async def on_ready(self):
+        _bot_state["status"] = "online"
+        _bot_state["started_at"] = time.time()
         self.log.banner()
         self.log.startup(f"Logged in as [bold bright_white]{self.user}[/bold bright_white] (ID: {self.user.id})")
         self.file_log.log_info(f"Bot started as {self.user} (ID: {self.user.id})")
@@ -699,6 +1061,10 @@ class ModLogger(discord.Client):
         self.log._print("reaction", "bright_yellow",
             f"[bold bright_cyan]{user_name}[/bold bright_cyan] reacted [bold bright_yellow]{emoji}[/bold bright_yellow] to: [dim]{msg_content[:80]}[/dim]"
         )
+        self.log.reaction_count += 1
+        _bot_state["reactions_logged"] = self.log.reaction_count
+        self.log.reaction_count += 1
+        _bot_state["reactions_logged"] = self.log.reaction_count
         self.file_log.log_reaction(user_name, user.id, emoji, channel_name, msg_content[:200])
 
         lines = []
@@ -744,6 +1110,7 @@ def _warn_snowflake(name: str, value: int):
         console.print(f"[warning]WARNING: {name} = {value} has {digits} digits. Expected 17-19.[/warning]")
 
 async def main():
+    _bot_state["status"] = "starting"
     if not TOKEN:
         console.print("[error]ERROR: Set SPY_TOKEN in .env[/error]")
         return
@@ -771,6 +1138,7 @@ async def main():
     except Exception as e:
         console.print(f"[error]Failed to start: {e!r}[/error]")
     finally:
+        _bot_state["status"] = "offline"
         if not client.is_closed():
             await client.close()
 
